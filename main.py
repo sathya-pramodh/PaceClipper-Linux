@@ -2,6 +2,8 @@
 # you will need to change the ffmpeg/ffprobe/vlc binary downloading & execution,
 # the explorer command for opening folder, and the winsound usage
 
+import pyglet
+from PIL import ImageTk, Image
 import asyncio
 import glob
 import hashlib
@@ -12,39 +14,38 @@ from subprocess import check_output
 import zipfile
 from tkinter import StringVar
 import customtkinter
-import winsound
 from CTkToolTip import CTkToolTip
 from customtkinter import filedialog
 import requests
-from ctypes import windll, byref, create_unicode_buffer
 import webbrowser
 
 from async_tkinter_loop import async_handler
 from async_tkinter_loop.mixins import AsyncCTk
 import datetime
-
-from PIL import Image
 from os import path
 
 bundle_dir = path.abspath(path.dirname(__file__))
 
+
 def getResourcePath(name):
     return path.join(bundle_dir, "resources", name)
 
+
 runData = {}
 
-vlcPath = "vlc/vlc-3.0.20/vlc.exe"
-ffmpegPath = "ffmpeg/ffmpeg-n5.1-latest-win64-lgpl-shared-5.1/bin/ffmpeg.exe"
-ffprobePath = "ffmpeg/ffmpeg-n5.1-latest-win64-lgpl-shared-5.1/bin/ffprobe.exe"
+vlcPath = "/usr/bin/vlc"
+ffmpegPath = "/usr/bin/ffmpeg"
+ffprobePath = "/usr/bin/ffprobe"
 
 home = os.path.expanduser("~")
 cwd = home + "/PaceClipper"
 version = "1.2"
 
 nvenc = False
-downloaded = False
+downloaded = True
 
 settings = {}
+
 
 def idToName(eventId):
     resolve = {
@@ -57,6 +58,7 @@ def idToName(eventId):
         "finish": "Finish",
     }
     return resolve.get(eventId, eventId)
+
 
 async def getFileName(dir, runTime):
     try:
@@ -73,11 +75,12 @@ async def getFileName(dir, runTime):
     except:
         return None
 
+
 class App(customtkinter.CTk, AsyncCTk):
     def __init__(self):
         super().__init__()
         self.geometry(self.getCenteredPosition(520, 500))
-        #self.geometry("520x500+-600+200")  # jojoe 2nd monitor for dev
+        # self.geometry("520x500+-600+200")  # jojoe 2nd monitor for dev
         self.title(f"PaceClipper v{version}")
         self.resizable(False, False)
 
@@ -92,110 +95,114 @@ class App(customtkinter.CTk, AsyncCTk):
         self.smoothing = customtkinter.StringVar(value="off")
         self.fortOnly = customtkinter.StringVar(value="off")
 
-        self.bgImage = customtkinter.CTkImage(Image.open(getResourcePath("bg.jpg")), size=(520, 500))
-        self.bgImageLabel = customtkinter.CTkLabel(self, text="", image=self.bgImage)
+        self.bgImage = customtkinter.CTkImage(
+            Image.open(getResourcePath("bg.jpg")), size=(520, 500))
+        self.bgImageLabel = customtkinter.CTkLabel(
+            self, text="", image=self.bgImage)
         self.bgImageLabel.place(x=0, y=0, relwidth=1, relheight=1)
 
         customtkinter.CTkLabel(self, text="Settings",
-                               font=("Minecraftia", 16), fg_color="#3E3548", text_color="#FFFFFF",
+                               font=("Minecraftia", 13), fg_color="#3E3548", text_color="#FFFFFF",
                                bg_color="#3E3548").place(x=425, y=10)
 
-        self.obsFolder = customtkinter.CTkButton(self, text="OBS Folder", font=("Minecraftia", 16),
+        self.obsFolder = customtkinter.CTkButton(self, text="OBS Folder", font=("Minecraftia", 13),
                                                  width=125, height=36, corner_radius=0,
                                                  fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
                                                  border_color="#b2a6bf", border_width=2,
                                                  command=self.findVideo)
         self.obsFolder.place(x=16, y=17)
-        CTkToolTip(self.obsFolder, "Select recordings folder", follow=True, delay=0, font=("Minecraftia", 12),
+        CTkToolTip(self.obsFolder, "Select recordings folder", follow=True, delay=0, font=("Minecraftia", 9),
                    border_color="#2e1e3b", border_width=2)
 
-        self.obsSelection = customtkinter.CTkButton(self, text="", font=("Minecraftia", 12),
-                                                   fg_color="#3E3548", bg_color="#3E3548", text_color="#AB9FB5",
-                                                   hover_color="#493e54", anchor="w",
-                                                   command=self.openObs
-                                                   )
+        self.obsSelection = customtkinter.CTkButton(self, text="", font=("Minecraftia", 9),
+                                                    fg_color="#3E3548", bg_color="#3E3548", text_color="#AB9FB5",
+                                                    hover_color="#493e54", anchor="w",
+                                                    command=self.openObs
+                                                    )
         self.obsSelection.place(x=145, y=21)
-        self.obsTooltip = CTkToolTip(self.obsSelection, "", follow=True, delay=0.5, font=("Minecraftia", 12),
+        self.obsTooltip = CTkToolTip(self.obsSelection, "", follow=True, delay=0.5, font=("Minecraftia", 9),
                                      border_color="#2e1e3b", border_width=2)
 
-        self.outFolder = customtkinter.CTkButton(self, text="Output Folder", font=("Minecraftia", 16),
+        self.outFolder = customtkinter.CTkButton(self, text="Output Folder", font=("Minecraftia", 13),
                                                  width=155, height=36, corner_radius=0,
                                                  fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
                                                  border_color="#b2a6bf", border_width=2,
                                                  command=self.findOutput
                                                  )
         self.outFolder.place(x=16, y=62)
-        CTkToolTip(self.outFolder, "Select output folder", follow=True, delay=0, font=("Minecraftia", 12),
+        CTkToolTip(self.outFolder, "Select output folder", follow=True, delay=0, font=("Minecraftia", 9),
                    border_color="#2e1e3b", border_width=2)
 
-        self.outSelection = customtkinter.CTkButton(self, text="J:/Path/to/output", font=("Minecraftia", 12),
-                                                   fg_color="#3E3548", bg_color="#3E3548", text_color="#AB9FB5",
-                                                   hover_color="#493e54", anchor="w",
-                                                   command=self.openOut
-                                                   )
+        self.outSelection = customtkinter.CTkButton(self, text="J:/Path/to/output", font=("Minecraftia", 9),
+                                                    fg_color="#3E3548", bg_color="#3E3548", text_color="#AB9FB5",
+                                                    hover_color="#493e54", anchor="w",
+                                                    command=self.openOut
+                                                    )
         self.outSelection.place(x=175, y=66)
-        self.outTooltip = CTkToolTip(self.outSelection, "", follow=True, delay=0.5, font=("Minecraftia", 12),
+        self.outTooltip = CTkToolTip(self.outSelection, "", follow=True, delay=0.5, font=("Minecraftia", 9),
                                      border_color="#2e1e3b", border_width=2)
 
-        self.username = customtkinter.CTkButton(self, text="Username", font=("Minecraftia", 16),
+        self.username = customtkinter.CTkButton(self, text="Username", font=("Minecraftia", 9),
                                                 width=110, height=36, corner_radius=0,
                                                 fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
                                                 border_color="#b2a6bf", border_width=2,
                                                 )
         self.username.place(x=16, y=106)
-        CTkToolTip(self.username, "Username (MC or Twitch)", follow=True, delay=0, font=("Minecraftia", 12),
+        CTkToolTip(self.username, "Username (MC or Twitch)", follow=True, delay=0, font=("Minecraftia", 9),
                    border_color="#2e1e3b", border_width=2)
 
         vcmd = (self.register(self.setName), '%P')
-        self.nameInput = customtkinter.CTkEntry(self, font=("Minecraftia", 16), textvariable=self.name, width=220,
+        self.nameInput = customtkinter.CTkEntry(self, font=("Minecraftia", 13), textvariable=self.name, width=220,
                                                 height=36, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF",
                                                 border_color="#867396", border_width=1,
                                                 corner_radius=0, validatecommand=vcmd, validate="key")
         self.nameInput.place(x=130, y=106)
 
-        self.outputName = customtkinter.CTkButton(self, text="File name", font=("Minecraftia", 16),
+        self.outputName = customtkinter.CTkButton(self, text="File name", font=("Minecraftia", 13),
                                                   width=110, height=36, corner_radius=0,
                                                   fg_color="#3E3548", bg_color="#3E3548", hover_color="#3E3548",
                                                   border_color="#b2a6bf", border_width=2,
                                                   )
 
-        self.outputNameExtension = customtkinter.CTkButton(self, text=".mp4", font=("Minecraftia", 16),
+        self.outputNameExtension = customtkinter.CTkButton(self, text=".mp4", font=("Minecraftia", 13),
                                                            width=30, height=30, corner_radius=0,
                                                            fg_color="#3E3548", bg_color="#3E3548"
                                                            )
 
-        self.outNameInput = customtkinter.CTkEntry(self, font=("Minecraftia", 16), textvariable=self.outname, width=190,
+        self.outNameInput = customtkinter.CTkEntry(self, font=("Minecraftia", 13), textvariable=self.outname, width=190,
                                                    height=36, fg_color="#3E3548", bg_color="#3E3548",
                                                    border_color="#867396", validate="focusout", border_width=1,
                                                    corner_radius=0)
 
-        self.outTooltip = CTkToolTip(self.outSelection, "", follow=True, delay=0.5, font=("Minecraftia", 12),
+        self.outTooltip = CTkToolTip(self.outSelection, "", follow=True, delay=0.5, font=("Minecraftia", 9),
                                      border_color="#2e1e3b", border_width=2)
 
-        customtkinter.CTkButton(self, text="", width=465, height=1, bg_color="#796d82").place(x=26, y=155)
+        customtkinter.CTkButton(self, text="", width=465,
+                                height=1, bg_color="#796d82").place(x=26, y=155)
 
         customtkinter.CTkLabel(self, text="Trimming",
-                               font=("Minecraftia", 16), fg_color="#3E3548", text_color="#FFFFFF",
+                               font=("Minecraftia", 13), fg_color="#3E3548", text_color="#FFFFFF",
                                bg_color="#3E3548").place(x=425, y=158)
 
         self.fetchButton = customtkinter.CTkButton(
-            self, text="Load runs", font=("Minecraftia", 16), width=125, height=36, corner_radius=0,
+            self, text="Load runs", font=("Minecraftia", 13), width=125, height=36, corner_radius=0,
             fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
             border_color="#b2a6bf", border_width=2,
             command=self.fetch)
         self.fetchButton.place(x=16, y=162)
 
-        self.fortButton = customtkinter.CTkCheckBox(self, text="2nd Struct", font=("Minecraftia", 16),
-              command=self.updateFort, variable=self.fortOnly,
-              onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf",
-              fg_color="#555577", hover_color="#493e54", text_color="#FFFFFF")
-        CTkToolTip(self.fortButton, "Only show runs with 2 structures", follow=True, delay=0, font=("Minecraftia", 12),
+        self.fortButton = customtkinter.CTkCheckBox(self, text="2nd Struct", font=("Minecraftia", 13),
+                                                    command=self.updateFort, variable=self.fortOnly,
+                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf",
+                                                    fg_color="#555577", hover_color="#493e54", text_color="#FFFFFF")
+        CTkToolTip(self.fortButton, "Only show runs with 2 structures", follow=True, delay=0, font=("Minecraftia", 9),
                    border_color="#2e1e3b", border_width=2)
 
-        customtkinter.CTkButton(self, text="", width=465, height=1, bg_color="#796d82").place(x=26, y=315)
+        customtkinter.CTkButton(self, text="", width=465,
+                                height=1, bg_color="#796d82").place(x=26, y=315)
 
         customtkinter.CTkLabel(self, text="Clipping",
-                               font=("Minecraftia", 16), fg_color="#3E3548", text_color="#FFFFFF",
+                               font=("Minecraftia", 13), fg_color="#3E3548", text_color="#FFFFFF",
                                bg_color="#3E3548").place(x=425, y=318)
 
         self.outButton = customtkinter.CTkButton(self, text="Open output folder", font=("Arial", 16),
@@ -203,103 +210,102 @@ class App(customtkinter.CTk, AsyncCTk):
 
         self.loadingLabel = customtkinter.CTkLabel(
             self, text="Loading...",
-            font=("Minecraftia", 16), fg_color="#3E3548", text_color="#FFFFFF",
+            font=("Minecraftia", 13), fg_color="#3E3548", text_color="#FFFFFF",
             bg_color="#3E3548")
         self.loadingLabel.place(x=155, y=166)
 
         self.runList = customtkinter.CTkOptionMenu(
-            self, values=[""], font=("Minecraftia", 12), dropdown_font=("Minecraftia", 12), command=self.selectRun,
+            self, values=[""], font=("Minecraftia", 9), dropdown_font=("Minecraftia", 9), command=self.selectRun,
             bg_color="#3E3548", fg_color="#3E3548", button_color="#524c59", button_hover_color="#756c7f",
             dropdown_fg_color="#3E3548", dropdown_hover_color="#524c59", width=258, dynamic_resizing=False
         )
 
-        self.runListButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 16),
+        self.runListButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 9),
                                                      width=263, height=32, corner_radius=0,
                                                      fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
                                                      border_color="#b2a6bf", border_width=2,
                                                      )
         self.runListButton.lower(self.runList)
 
-        self.startSplit = customtkinter.CTkOptionMenu(self, values=[""], font=("Minecraftia", 12),
-                                                      dropdown_font=("Minecraftia", 12), bg_color="#3E3548",
+        self.startSplit = customtkinter.CTkOptionMenu(self, values=[""], font=("Minecraftia", 9),
+                                                      dropdown_font=("Minecraftia", 9), bg_color="#3E3548",
                                                       fg_color="#3E3548", button_color="#524c59",
                                                       button_hover_color="#756c7f",
                                                       dropdown_fg_color="#3E3548", dropdown_hover_color="#524c59", )
-        self.startSplitButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 16),
-                                                     width=144, height=32, corner_radius=0,
-                                                     fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
-                                                     border_color="#b2a6bf", border_width=2,
-                                                     )
+        self.startSplitButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 13),
+                                                        width=144, height=32, corner_radius=0,
+                                                        fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
+                                                        border_color="#b2a6bf", border_width=2,
+                                                        )
         self.startSplitButton.lower(self.startSplit)
 
-        self.endSplit = customtkinter.CTkOptionMenu(self, values=[""], font=("Minecraftia", 12),
-                                                    dropdown_font=("Minecraftia", 12), bg_color="#3E3548",
+        self.endSplit = customtkinter.CTkOptionMenu(self, values=[""], font=("Minecraftia", 9),
+                                                    dropdown_font=("Minecraftia", 9), bg_color="#3E3548",
                                                     fg_color="#3E3548", button_color="#524c59",
                                                     button_hover_color="#756c7f", dropdown_fg_color="#3E3548",
                                                     dropdown_hover_color="#524c59")
-        self.endSplitButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 16),
-                                                     width=144, height=32, corner_radius=0,
-                                                     fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
-                                                     border_color="#b2a6bf", border_width=2,
-                                                     )
+        self.endSplitButton = customtkinter.CTkButton(self, text="", font=("Minecraftia", 13),
+                                                      width=144, height=32, corner_radius=0,
+                                                      fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
+                                                      border_color="#b2a6bf", border_width=2,
+                                                      )
         self.endSplitButton.lower(self.startSplit)
 
         self.startLabel = customtkinter.CTkLabel(
-            self, text="Start: ", font=("Minecraftia", 16), width=60, height=30, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
+            self, text="Start: ", font=("Minecraftia", 13), width=60, height=30, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
         self.endLabel = customtkinter.CTkLabel(
-            self, text="End: ", font=("Minecraftia", 16), width=60, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
+            self, text="End: ", font=("Minecraftia", 13), width=60, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
         self.runLabel = customtkinter.CTkLabel(
-            self, text="Run: ", font=("Minecraftia", 16), height=30, width=60, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
+            self, text="Run: ", font=("Minecraftia", 13), height=30, width=60, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
 
         self.watchBtn = customtkinter.CTkButton(
-            self, text="Watch", font=("Minecraftia", 18), width=100, height=45, corner_radius=0,
+            self, text="Watch", font=("Minecraftia", 15), width=100, height=45, corner_radius=0,
             fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
             border_color="#b2a6bf", border_width=2, command=self.watchSplit)
 
         self.clipButton = customtkinter.CTkButton(
-            self, text="Clip", font=("Minecraftia", 18), width=100, height=45, corner_radius=0,
+            self, text="Clip", font=("Minecraftia", 15), width=100, height=45, corner_radius=0,
             fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
             border_color="#b2a6bf", border_width=2, command=self.clip)
 
-        self.smoothButton = customtkinter.CTkCheckBox(self, text="Blend down to 60 fps", font=("Minecraftia", 16),
+        self.smoothButton = customtkinter.CTkCheckBox(self, text="Blend down to 60 fps", font=("Minecraftia", 13),
                                                       command=self.update_smoothing, variable=self.smoothing,
                                                       onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf",
                                                       fg_color="#555577", hover_color="#493e54", text_color="#FFFFFF")
 
         self.trackLabel = customtkinter.CTkLabel(
-            self, text="Audio tracks:", font=("Minecraftia", 16), width=0, height=0, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
+            self, text="Audio tracks:", font=("Minecraftia", 13), width=0, height=0, fg_color="#3E3548", bg_color="#3E3548", text_color="#FFFFFF")
 
-
-        self.trackOpt1 = customtkinter.CTkCheckBox(self, text="1", font=("Minecraftia", 16),
-                                                      command=self.updateTracks, variable=self.track1,
-                                                      onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
-                                                      fg_color="#555577", hover_color="#493e54", width=0)
-        self.trackOpt2 = customtkinter.CTkCheckBox(self, text="2", font=("Minecraftia", 16),
+        self.trackOpt1 = customtkinter.CTkCheckBox(self, text="1", font=("Minecraftia", 12),
+                                                   command=self.updateTracks, variable=self.track1,
+                                                   onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
+                                                   fg_color="#555577", hover_color="#493e54", width=0)
+        self.trackOpt2 = customtkinter.CTkCheckBox(self, text="2", font=("Minecraftia", 13),
                                                    command=self.updateTracks, variable=self.track2,
                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
                                                    fg_color="#555577", hover_color="#493e54", width=0)
-        self.trackOpt3 = customtkinter.CTkCheckBox(self, text="3", font=("Minecraftia", 16),
+        self.trackOpt3 = customtkinter.CTkCheckBox(self, text="3", font=("Minecraftia", 13),
                                                    command=self.updateTracks, variable=self.track3,
                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
                                                    fg_color="#555577", hover_color="#493e54", width=0)
-        self.trackOpt4 = customtkinter.CTkCheckBox(self, text="4", font=("Minecraftia", 16),
+        self.trackOpt4 = customtkinter.CTkCheckBox(self, text="4", font=("Minecraftia", 13),
                                                    command=self.updateTracks, variable=self.track4,
                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
                                                    fg_color="#555577", hover_color="#493e54", width=0)
-        self.trackOpt5 = customtkinter.CTkCheckBox(self, text="5", font=("Minecraftia", 16),
+        self.trackOpt5 = customtkinter.CTkCheckBox(self, text="5", font=("Minecraftia", 13),
                                                    command=self.updateTracks, variable=self.track5,
                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
                                                    fg_color="#555577", hover_color="#493e54", width=0)
-        self.trackOpt6 = customtkinter.CTkCheckBox(self, text="6", font=("Minecraftia", 16),
+        self.trackOpt6 = customtkinter.CTkCheckBox(self, text="6", font=("Minecraftia", 13),
                                                    command=self.updateTracks, variable=self.track6,
                                                    onvalue="on", offvalue="off", bg_color="#3E3548", border_color="#b2a6bf", text_color="#FFFFFF",
                                                    fg_color="#555577", hover_color="#493e54", width=0)
 
         self.pacemanButton = customtkinter.CTkButton(
-            self, text="PaceMan", font=("Minecraftia", 16), width=100, height=32, corner_radius=0,
+            self, text="PaceMan", font=("Minecraftia", 13), width=100, height=32, corner_radius=0,
             fg_color="#3E3548", bg_color="#3E3548", hover_color="#493e54",
             border_color="#b2a6bf", border_width=2, command=self.openPaceman)
-        CTkToolTip(self.pacemanButton, "Open run on PaceMan", follow=True, delay=0, font=("Minecraftia", 12),
+        CTkToolTip(self.pacemanButton, "Open run on PaceMan", follow=True, delay=0, font=("Minecraftia", 9),
                    border_color="#2e1e3b", border_width=2)
 
     def getCenteredPosition(self, width, height):
@@ -339,15 +345,17 @@ class App(customtkinter.CTk, AsyncCTk):
 
     @async_handler
     async def openObs(self):
-        os.startfile(settings["obsPath"])
+        os.stat(settings["obsPath"])
 
     @async_handler
     async def openOut(self):
-        os.startfile(settings["outputPath"])
+        os.stat(settings["outputPath"])
 
     def setIcon(self, window):
         if window.winfo_exists():
-            window.iconbitmap(getResourcePath("icon.ico"))
+            img = ImageTk.PhotoImage(
+                Image.open(getResourcePath("icon.ico")))
+            window.wm_iconphoto(True, img)
 
     async def download_with_progress(self, download_url, save_path, extract_path, final_path, expected_hash):
         if os.path.exists(final_path):
@@ -399,9 +407,9 @@ class App(customtkinter.CTk, AsyncCTk):
                         if (progress - lastUpdate) > progInterval:
                             lastUpdate = progress
                             if not progWindow.winfo_exists():
-                                print("Cancelling download due to progress window closed")
+                                print(
+                                    "Cancelling download due to progress window closed")
                                 exit(1)
-                                return
                             bar.set(progress / 100)
                             pctLabel.configure(text=f"{progress:.0f}%")
                             progWindow.update()
@@ -416,28 +424,13 @@ class App(customtkinter.CTk, AsyncCTk):
                     zip_ref.extractall(extract_path)
                     print(f"Extracted ZIP to: {extract_path}")
             else:
-                print("Downloaded file hash does not match expected hash. Discarding file.")
+                print(
+                    "Downloaded file hash does not match expected hash. Discarding file.")
 
             self.after(100, os.remove, save_path)
         except requests.exceptions.RequestException as e:
             print(f"Download failed: {e}")
         progWindow.destroy()
-
-    async def download_dependencies(self):
-        global nvenc, downloaded
-        vlc_url = "https://vlc.pixelx.de/vlc/3.0.20/win32/vlc-3.0.20-win32.zip"
-        await self.download_with_progress(vlc_url, "vlc.zip", "vlc", vlcPath,
-                                          "d22155d8330f99f2050e8fe3fd2b8e85104ba7f899a875c21f92a97cbdfbb7c5")
-
-        ffmpeg_url = "https://github.com/jojoe77777/PaceClipper/releases/download/0.0.1/ffmpeg-n5.1-latest-win64-lgpl-shared-5.1.zip"
-        await self.download_with_progress(ffmpeg_url, "ffmpeg.zip", "ffmpeg",
-                                          ffmpegPath,
-                                          "a1d69670efdd2d5f453879a187a0dae94f649612aa143a234474b42667bfd473")
-
-        nvenc = "cuda" in check_output(
-            [ffmpegPath, "-hide_banner", "-init_hw_device", "list"]).decode("utf-8")
-        print(f"NVENC available: {nvenc}")
-        downloaded = True
 
     def load_settings(self):
         global settings, startOffset, endOffset
@@ -450,8 +443,8 @@ class App(customtkinter.CTk, AsyncCTk):
         except (FileNotFoundError, json.JSONDecodeError):
             default_settings = {
                 "name": "Username",
-                "obsPath": "C:/OBS/",
-                "outputPath": "C:/Output/",
+                "obsPath": os.path.join(home, "obs"),
+                "outputPath": os.path.join(home, "output"),
                 "startOffset": 2,
                 "endOffset": 4,
                 "extraBitratePercent": 30,
@@ -466,24 +459,34 @@ class App(customtkinter.CTk, AsyncCTk):
             }
             settings = default_settings
             self.save_settings()
-        self.setObsPath(settings["obsPath"] if "obsPath" in settings else "C:/OBS/", True)
-        self.setOutputPath(settings["outputPath"] if "outputPath" in settings else "C:/Output/", True)
+        self.setObsPath(settings["obsPath"]
+                        if "obsPath" in settings else os.path.join(home, "obs"), True)
+        self.setOutputPath(
+            settings["outputPath"] if "outputPath" in settings else os.path.join(home, "output"), True)
         self.name.set(settings["name"])
         self.smoothing.set("on" if settings["doSmoothing"] else "off")
-        self.track1.set("on" if "track1" in settings and settings["track1"] else "off")
-        self.track2.set("on" if "track2" in settings and settings["track2"] else "off")
-        self.track3.set("on" if "track3" in settings and settings["track3"] else "off")
-        self.track4.set("on" if "track4" in settings and settings["track4"] else "off")
-        self.track5.set("on" if "track5" in settings and settings["track5"] else "off")
-        self.track6.set("on" if "track6" in settings and settings["track6"] else "off")
-        self.fortOnly.set("on" if "fortOnly" in settings and settings["fortOnly"] else "off")
+        self.track1.set(
+            "on" if "track1" in settings and settings["track1"] else "off")
+        self.track2.set(
+            "on" if "track2" in settings and settings["track2"] else "off")
+        self.track3.set(
+            "on" if "track3" in settings and settings["track3"] else "off")
+        self.track4.set(
+            "on" if "track4" in settings and settings["track4"] else "off")
+        self.track5.set(
+            "on" if "track5" in settings and settings["track5"] else "off")
+        self.track6.set(
+            "on" if "track6" in settings and settings["track6"] else "off")
+        self.fortOnly.set(
+            "on" if "fortOnly" in settings and settings["fortOnly"] else "off")
         startOffset = settings["startOffset"]
         endOffset = settings["endOffset"]
 
     def setObsPath(self, path, save=True):
         global settings
         settings["obsPath"] = path
-        self.obsSelection.configure(text=(path if len(path) < 30 else "..." + path[-30:]))
+        self.obsSelection.configure(
+            text=(path if len(path) < 30 else "..." + path[-30:]))
         self.obsTooltip.messageVar.set(path)
         if save:
             self.save_settings()
@@ -491,7 +494,8 @@ class App(customtkinter.CTk, AsyncCTk):
     def setOutputPath(self, path, save=True):
         global settings
         settings["outputPath"] = path
-        self.outSelection.configure(text=(path if len(path) < 30 else "..." + path[-30:]))
+        self.outSelection.configure(
+            text=(path if len(path) < 30 else "..." + path[-30:]))
         self.outTooltip.messageVar.set(path)
         if save:
             self.save_settings()
@@ -538,7 +542,7 @@ class App(customtkinter.CTk, AsyncCTk):
         bar.set(0.0)
 
         pctLabel = customtkinter.CTkLabel(
-            progWindow, text="0%", font=("Minecraftia", 16), bg_color="#3E3548", fg_color="#3E3548")
+            progWindow, text="0%", font=("Minecraftia", 13), bg_color="#3E3548", fg_color="#3E3548")
         pctLabel.grid(row=0, column=3, columnspan=2,
                       padx=10, pady=10, sticky="w")
 
@@ -554,11 +558,12 @@ class App(customtkinter.CTk, AsyncCTk):
                                    universal_newlines=True)
 
         try:
-            while process.poll() is None:
+            while process.poll() is None and process.stdout is not None:
                 for line in process.stdout:
                     if "out_time_us" in line:
                         if not progWindow.winfo_exists():
-                            print("Cancelling ffmpeg process due to progress window closed")
+                            print(
+                                "Cancelling ffmpeg process due to progress window closed")
                             process.kill()
                             return False
                         out_time_us = int(line.split("=")[1].strip())
@@ -583,7 +588,7 @@ class App(customtkinter.CTk, AsyncCTk):
     async def display_error(self, error, width=300, height=48):
         progWindow = customtkinter.CTkToplevel(self)
         progWindow.geometry(self.getCenteredPosition(width, height))
-        progWindow.title(f"Error")
+        progWindow.title("Error")
         progWindow.resizable(False, False)
         progWindow.attributes("-alpha", 0.0)  # dont render window yet
 
@@ -591,7 +596,7 @@ class App(customtkinter.CTk, AsyncCTk):
         app.after(201, self.setIcon, progWindow)
 
         label = customtkinter.CTkLabel(
-            progWindow, text=error, font=("Minecraftia", 16), bg_color="#3E3548", fg_color="#3E3548", width=width,
+            progWindow, text=error, font=("Minecraftia", 13), bg_color="#3E3548", fg_color="#3E3548", width=width,
             height=height)
         label.place(relx=0.5, rely=0.5, anchor="center")
         # label.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="w")
@@ -655,16 +660,21 @@ class App(customtkinter.CTk, AsyncCTk):
         dms, dss = divmod(duration, 60)
         dhs, dms = divmod(dms, 60)
 
-        lastUpdated = datetime.datetime.fromtimestamp(run['lastUpdated']).strftime('%I_%M%p_%d_%m_%y')
+        lastUpdated = datetime.datetime.fromtimestamp(
+            run['lastUpdated']).strftime('%I_%M%p_%d_%m_%y')
         if self.startSplit.get() == "start":
-            baseName = f"{self.startSplit.get()}_{mes:01d}_{ses:02d}_{self.endSplit.get()}_{lastUpdated}"
+            baseName = f"{self.startSplit.get()}_{mes:01d}_{ses:02d}_{
+                self.endSplit.get()}_{lastUpdated}"
         else:
-            baseName = f"{mss}_{sss}_{self.startSplit.get()}_{mes:01d}_{ses:02d}_{self.endSplit.get()}_{lastUpdated}"
+            baseName = f"{mss}_{sss}_{self.startSplit.get()}_{mes:01d}_{ses:02d}_{
+                self.endSplit.get()}_{lastUpdated}"
 
         name = f"{settings['outputPath']}\\unfinished_{baseName}.mp4"
-        nameSmooth = f"{settings['outputPath']}\\unfinished_{baseName}_smooth.mp4"
+        nameSmooth = f"{settings['outputPath']
+                        }\\unfinished_{baseName}_smooth.mp4"
 
-        tracks = [settings["track1"], settings["track2"], settings["track3"], settings["track4"], settings["track5"], settings["track6"]]
+        tracks = [settings["track1"], settings["track2"], settings["track3"],
+                  settings["track4"], settings["track5"], settings["track6"]]
         trackArgs = ["-map", "0:v"]
         for i, track in enumerate(tracks):
             if track:
@@ -672,9 +682,10 @@ class App(customtkinter.CTk, AsyncCTk):
                 trackArgs.append(f"0:a:{i}?")
 
         if not await self.run_ffmpeg(["-ss", f"{hs:02d}:{ms:02d}:{ss:02d}", "-t",
-                                      f"{int(dhs):02d}:{int(dms):02d}:{int(dss):02d}", "-i", filePath,
-                                      "-avoid_negative_ts", "make_zero", "-c", "copy", "-acodec", "copy"] + trackArgs + [name],
-                                     duration, "Clipping video..."):
+                                      f"{int(dhs):02d}:{int(dms):02d}:{
+                int(dss):02d}", "-i", filePath,
+                "-avoid_negative_ts", "make_zero", "-c", "copy", "-acodec", "copy"] + trackArgs + [name],
+                duration, "Clipping video..."):
             return
 
         # remove "unfinished" once complete
@@ -693,7 +704,8 @@ class App(customtkinter.CTk, AsyncCTk):
                                         renamed]).decode("utf-8").strip())
 
             # apply extra bitrate to reduce impact of double nvenc encoding, default 30% extra
-            boosted = int(bitrate * (1 + int(settings["extraBitratePercent"]) / 100))
+            boosted = int(
+                bitrate * (1 + int(settings["extraBitratePercent"]) / 100))
 
             if not await self.run_ffmpeg(
                     ["-i", renamed, "-vf", "tblend=all_mode=average", "-r", "60", "-c:v", "h264_nvenc", "-b:v",
@@ -708,11 +720,9 @@ class App(customtkinter.CTk, AsyncCTk):
             if not os.path.exists(renamedSmooth):
                 os.rename(nameSmooth, renamedSmooth)
             os.system(f"explorer /select,{safePath}")
-            winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS | winsound.SND_ASYNC)
         else:
             safePath = renamed.replace("/", "\\")
             os.system(f"explorer /select,{safePath}")
-            winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS | winsound.SND_ASYNC)
 
     @async_handler
     async def findVideo(self):
@@ -739,7 +749,8 @@ class App(customtkinter.CTk, AsyncCTk):
 
         ctime = os.path.getctime(filePath)
         vodStartOffset = int(start - ctime)
-        subprocess.Popen([vlcPath, f"file:///{filePath}", f"--start-time={vodStartOffset}", "--no-video-title-show"])
+        subprocess.Popen(
+            [vlcPath, f"file:///{filePath}", f"--start-time={vodStartOffset}", "--no-video-title-show"])
 
     def hideThings(self):
         self.runLabel.place(x=0, y=999)
@@ -838,7 +849,8 @@ class App(customtkinter.CTk, AsyncCTk):
                     if i == 1:
                         splitOptions.append(split)
 
-            lastUpdated = datetime.datetime.fromtimestamp(run['lastUpdated']).strftime('%H:%M %d/%m/%y')
+            lastUpdated = datetime.datetime.fromtimestamp(
+                run['lastUpdated']).strftime('%H:%M %d/%m/%y')
             name = f"{run['runName']} {lastUpdated}"
             runs.append(name)
             runData[name] = run
@@ -855,12 +867,10 @@ class App(customtkinter.CTk, AsyncCTk):
 
         self.loadingLabel.configure(text="")
 
-def load_font(fontpath):
-    pathbuf = create_unicode_buffer(fontpath)
-    AddFontResourceEx = windll.gdi32.AddFontResourceExW
 
-    numFontsAdded = AddFontResourceEx(byref(pathbuf), 0x10 | 0x20, 0)
-    return numFontsAdded > 0
+def load_font(fontpath):
+    pyglet.font.add_file(fontpath)
+
 
 if __name__ == "__main__":
     if not os.path.exists(cwd):
@@ -868,15 +878,13 @@ if __name__ == "__main__":
     if not os.path.exists(cwd + "/videos"):
         os.mkdir(cwd + "/videos")
 
-    if not load_font(getResourcePath("font.ttf")):
-        print("Failed to load font")
-
+    load_font(getResourcePath("font.ttf"))
     os.chdir(cwd)
 
     app = App()
     app.after(1, app.load_settings)
     app.after(2, app.fetch)
-    app.iconbitmap(getResourcePath("icon.ico"))
-
-    asyncio.get_event_loop_policy().get_event_loop().create_task(app.download_dependencies())
+    img = ImageTk.PhotoImage(
+        Image.open(getResourcePath("icon.ico")))
+    app.wm_iconphoto(True, img)
     app.async_mainloop()

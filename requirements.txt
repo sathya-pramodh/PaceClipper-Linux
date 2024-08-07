@@ -3,3 +3,5 @@ customtkinter==5.2.2
 requests~=2.31.0
 CTkToolTip~=0.8
 pillow~=10.2.0
+pyglet~=2.0.17
+PIL
